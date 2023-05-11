@@ -8,16 +8,19 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define MENU_TIME_LENGTH 15
+#define MENU_TIME_LENGTH 	15
+#define COINTOSS 			Math_GetRandomInt( 0, 100 ) >= 50
 
 char g_CTRifleChoice[MAXPLAYERS+1][WEAPON_STRING_LENGTH];
-char g_TRifleChoice[MAXPLAYERS+1][WEAPON_STRING_LENGTH];
 Handle g_hCTRifleChoiceCookie;
+
+char g_TRifleChoice[MAXPLAYERS+1][WEAPON_STRING_LENGTH];
 Handle g_hTRifleChoiceCookie;
 
 char g_CTPistolChoice[MAXPLAYERS+1][WEAPON_STRING_LENGTH];
-char g_TPistolChoice[MAXPLAYERS+1][WEAPON_STRING_LENGTH];
 Handle g_hCTPistolChoiceCookie;
+
+char g_TPistolChoice[MAXPLAYERS+1][WEAPON_STRING_LENGTH];
 Handle g_hTPistolChoiceCookie;
 
 bool g_AwpChoice[MAXPLAYERS+1];
@@ -38,13 +41,15 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	g_hCTRifleChoiceCookie = RegClientCookie( "retakes_ctriflechoice", "", CookieAccess_Private );
-	g_hCTPistolChoiceCookie = RegClientCookie( "retakes_ctpistolchoice", "", CookieAccess_Private );
+	g_hCTRifleChoiceCookie = RegClientCookie( "retakes_ctriflechoice", "", CookieAccess_Protected );
+	g_hCTPistolChoiceCookie = RegClientCookie( "retakes_ctpistolchoice", "", CookieAccess_Protected );
 
-	g_hTRifleChoiceCookie = RegClientCookie( "retakes_triflechoice", "", CookieAccess_Private );
-	g_hTPistolChoiceCookie = RegClientCookie( "retakes_tpistolchoice", "", CookieAccess_Private );
+	g_hTRifleChoiceCookie = RegClientCookie( "retakes_triflechoice", "", CookieAccess_Protected );
+	g_hTPistolChoiceCookie = RegClientCookie( "retakes_tpistolchoice", "", CookieAccess_Protected );
 
-	g_hAwpChoiceCookie = RegClientCookie( "retakes_awpchoice", "", CookieAccess_Private );
+	g_hAwpChoiceCookie = RegClientCookie( "retakes_awpchoice", "", CookieAccess_Protected );
+
+	Retakes_MessageToAll("Started plugin");
 }
 
 public void OnClientConnected( int client )
@@ -62,14 +67,41 @@ public void OnClientConnected( int client )
 	g_AwpChoice[client] = false;
 }
 
-public void Retakes_OnGunsCommand( int client )
-{
-	GiveWeaponsMenu( client );
-}
-
 public void Retakes_OnWeaponsAllocated( ArrayList tPlayers, ArrayList ctPlayers, Bombsite bombsite )
 {
-	WeaponAllocator( tPlayers, ctPlayers, bombsite );
+	pistolround = Math_GetRandomInt(0, 100) <= pistolround_chance;
+	bool helmet = !pistolround;
+
+	if ( pistolround )
+		Retakes_MessageToAll("Pistol Round!");
+
+	for ( int i = 1; i <= MaxClients; i++ )
+	{
+		if ( !IsClientInGame( i ) || IsFakeClient( i ) || GetClientTeam( i ) < CS_TEAM_T )
+            continue;
+
+		char primary[WEAPON_STRING_LENGTH];
+		char secondary[WEAPON_STRING_LENGTH];
+		char nades[NADE_STRING_LENGTH];
+
+		bool kit = GetClientTeam( i ) == CS_TEAM_CT;
+		int team = GetClientTeam( i );
+		int health = 100;
+		int kevlar = 100;
+		primary = "";
+		GetClientCookie( i, team == CS_TEAM_T ? g_hTPistolChoiceCookie : g_hCTPistolChoiceCookie, secondary, sizeof( secondary ) );
+
+		if ( !pistolround )
+		{
+			if ( COINTOSS && g_AwpChoice[i] )
+				primary = "weapon_awp";
+			else
+				GetClientCookie( i, team == CS_TEAM_T ? g_hTRifleChoiceCookie : g_hCTRifleChoiceCookie, primary, sizeof( primary ) );
+		}
+
+		SetNades( nades );
+		Retakes_SetPlayerInfo( i, primary, secondary, nades, health, kevlar, helmet, kit );
+	}
 }
 
 public void OnClientCookiesCached( int client )
@@ -78,17 +110,19 @@ public void OnClientCookiesCached( int client )
 		return;
 
 	char ctrifle[WEAPON_STRING_LENGTH];
-	char trifle[WEAPON_STRING_LENGTH];
 	GetClientCookie( client, g_hCTRifleChoiceCookie, ctrifle, sizeof( ctrifle ) );
-	GetClientCookie( client, g_hTRifleChoiceCookie, trifle, sizeof( trifle ) );
 	g_CTRifleChoice[client] = ctrifle;
+
+	char trifle[WEAPON_STRING_LENGTH];
+	GetClientCookie( client, g_hTRifleChoiceCookie, trifle, sizeof( trifle ) );
 	g_TRifleChoice[client] = trifle;
 
 	char ctpistol[WEAPON_STRING_LENGTH];
-	char tpistol[WEAPON_STRING_LENGTH];
 	GetClientCookie( client, g_hCTPistolChoiceCookie, ctpistol, sizeof( ctpistol ) );
-	GetClientCookie( client, g_hTPistolChoiceCookie, tpistol, sizeof( tpistol ) );
 	g_CTPistolChoice[client] = ctpistol;
+
+	char tpistol[WEAPON_STRING_LENGTH];
+	GetClientCookie( client, g_hTPistolChoiceCookie, tpistol, sizeof( tpistol ) );
 	g_TPistolChoice[client] = tpistol;
 
 	g_AwpChoice[client] = GetCookieBool( client, g_hAwpChoiceCookie );
@@ -96,12 +130,6 @@ public void OnClientCookiesCached( int client )
 
 static void SetNades( char nades[NADE_STRING_LENGTH] )
 {
-	if ( pistolround )
-	{
-		nades = "";
-		return;
-	}
-
 	int rand = GetRandomInt( 0, 3 );
 
 	switch ( rand )
@@ -120,57 +148,7 @@ static void SetNades( char nades[NADE_STRING_LENGTH] )
 	}
 }
 
-public void WeaponAllocator( ArrayList tPlayers, ArrayList ctPlayers, Bombsite bombsite )
-{
-	int tCount = tPlayers.Length;
-	int ctCount = ctPlayers.Length;
-
-	char primary[WEAPON_STRING_LENGTH];
-	char secondary[WEAPON_STRING_LENGTH];
-	char nades[NADE_STRING_LENGTH];
-	int health = 100;
-	int kevlar = 100;
-	bool helmet = true;
-	bool kit = true;
-
-	pistolround = Math_GetRandomInt(0, 100) <= pistolround_chance;
-	if ( pistolround )
-		Retakes_MessageToAll("Pistol Round!");
-
-	for ( int i = 0; i < tCount; i++ )
-	{
-		int client = tPlayers.Get( i );
-		primary = "";
-		if ( !pistolround )
-			primary = ( GetURandomInt() % 2 && g_AwpChoice[client] ) ? "weapon_awp" : g_TRifleChoice[client];
-		secondary = g_TPistolChoice[client];
-
-		kit = false;
-		health = 100;
-		kevlar = 100;
-		helmet = true;
-		SetNades( nades );
-		Retakes_SetPlayerInfo( client, primary, secondary, nades, health, kevlar, helmet, kit );
-	}
-
-	for ( int i = 0; i < ctCount; i++ )
-	{
-		int client = ctPlayers.Get( i );
-		primary = "";
-		if ( !pistolround )
-			primary = ( GetURandomInt() % 2 && g_AwpChoice[client] ) ? "weapon_awp" : g_CTRifleChoice[client];
-		secondary = g_CTPistolChoice[client];
-
-		kit = true;
-		health = 100;
-		kevlar = 100;
-		helmet = true;
-		SetNades( nades );
-		Retakes_SetPlayerInfo( client, primary, secondary, nades, health, kevlar, helmet, kit );
-	}
-}
-
-public void GiveWeaponsMenu( int client )
+public void Retakes_OnGunsCommand( int client )
 {
 	Menu menu = new Menu( MenuHandler_Rifle );
 	if ( GetClientTeam( client ) == CS_TEAM_CT )
