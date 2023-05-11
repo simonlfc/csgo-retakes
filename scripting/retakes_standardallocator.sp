@@ -1,6 +1,7 @@
 #include <sourcemod>
 #include <cstrike>
 #include <clientprefs>
+#include <smlib>
 #include "include/retakes.inc"
 #include "retakes/generic.sp"
 
@@ -22,11 +23,14 @@ Handle g_hTPistolChoiceCookie;
 bool g_AwpChoice[MAXPLAYERS+1];
 Handle g_hAwpChoiceCookie;
 
+bool pistolround = false;
+int pistolround_chance = 25;
+
 
 public Plugin myinfo =
 {
 	name = "CS:GO Retakes: standard weapon allocator",
-	author = "splewis",
+	author = "simonlfc",
 	description = "Defines a simple weapon allocation policy and lets players set weapon preferences",
 	version = PLUGIN_VERSION,
 	url = "https://github.com/simonlfc/csgo-retakes"
@@ -35,18 +39,26 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	g_hCTRifleChoiceCookie = RegClientCookie( "retakes_ctriflechoice", "", CookieAccess_Private );
-	g_hTRifleChoiceCookie = RegClientCookie( "retakes_triflechoice", "", CookieAccess_Private );
 	g_hCTPistolChoiceCookie = RegClientCookie( "retakes_ctpistolchoice", "", CookieAccess_Private );
+
+	g_hTRifleChoiceCookie = RegClientCookie( "retakes_triflechoice", "", CookieAccess_Private );
 	g_hTPistolChoiceCookie = RegClientCookie( "retakes_tpistolchoice", "", CookieAccess_Private );
+
 	g_hAwpChoiceCookie = RegClientCookie( "retakes_awpchoice", "", CookieAccess_Private );
 }
 
 public void OnClientConnected( int client )
 {
 	g_CTRifleChoice[client] = "weapon_m4a1_silencer";
-	g_TRifleChoice[client] = "weapon_ak47";
 	g_CTPistolChoice[client] = "weapon_usp_silencer";
+	SetClientCookie( client, g_hCTRifleChoiceCookie, g_CTRifleChoice[client] );
+	SetClientCookie( client, g_hCTPistolChoiceCookie, g_CTPistolChoice[client] );
+
+	g_TRifleChoice[client] = "weapon_ak47";
 	g_TPistolChoice[client] = "weapon_glock";
+	SetClientCookie( client, g_hTRifleChoiceCookie, g_TRifleChoice[client] );
+	SetClientCookie( client, g_hTPistolChoiceCookie, g_TPistolChoice[client] );
+
 	g_AwpChoice[client] = false;
 }
 
@@ -84,25 +96,27 @@ public void OnClientCookiesCached( int client )
 
 static void SetNades( char nades[NADE_STRING_LENGTH] )
 {
+	if ( pistolround )
+	{
+		nades = "";
+		return;
+	}
+
 	int rand = GetRandomInt( 0, 3 );
 
 	switch ( rand )
 	{
 	case 0:
 		nades = "";
-		break;
 
 	case 1:
 		nades = "s";
-		break;
 
 	case 2:
 		nades = "f";
-		break;
 
 	case 3:
 		nades = "h";
-		break;
 	}
 }
 
@@ -119,16 +133,22 @@ public void WeaponAllocator( ArrayList tPlayers, ArrayList ctPlayers, Bombsite b
 	bool helmet = true;
 	bool kit = true;
 
+	pistolround = Math_GetRandomInt(0, 100) <= pistolround_chance;
+	if ( pistolround )
+		Retakes_MessageToAll("Pistol Round!");
+
 	for ( int i = 0; i < tCount; i++ )
 	{
 		int client = tPlayers.Get( i );
-		primary = g_AwpChoice[client] ? "weapon_awp" : g_TRifleChoice[client];
+		primary = "";
+		if ( !pistolround )
+			primary = ( GetURandomInt() % 2 && g_AwpChoice[client] ) ? "weapon_awp" : g_TRifleChoice[client];
 		secondary = g_TPistolChoice[client];
 
+		kit = false;
 		health = 100;
 		kevlar = 100;
 		helmet = true;
-		kit = false;
 		SetNades( nades );
 		Retakes_SetPlayerInfo( client, primary, secondary, nades, health, kevlar, helmet, kit );
 	}
@@ -136,7 +156,9 @@ public void WeaponAllocator( ArrayList tPlayers, ArrayList ctPlayers, Bombsite b
 	for ( int i = 0; i < ctCount; i++ )
 	{
 		int client = ctPlayers.Get( i );
-		primary = g_AwpChoice[client] ? "weapon_awp" : g_CTRifleChoice[client];
+		primary = "";
+		if ( !pistolround )
+			primary = ( GetURandomInt() % 2 && g_AwpChoice[client] ) ? "weapon_awp" : g_CTRifleChoice[client];
 		secondary = g_CTPistolChoice[client];
 
 		kit = true;
@@ -151,49 +173,49 @@ public void WeaponAllocator( ArrayList tPlayers, ArrayList ctPlayers, Bombsite b
 public void GiveWeaponsMenu( int client )
 {
 	Menu menu = new Menu( MenuHandler_Rifle );
-    if ( GetClientTeam( client ) == CS_TEAM_CT )
-    {
-        menu.SetTitle( "Select a CT rifle:" );
-        menu.AddItem( "weapon_m4a1", "M4A4" );
-        menu.AddItem( "weapon_m4a1_silencer", "M4A1-S" );
-        menu.AddItem( "weapon_aug", "AUG" );
-    }
-    else if ( GetClientTeam( client ) == CS_TEAM_T )
-    {
-        menu.SetTitle( "Select a T rifle:" );
-        menu.AddItem( "weapon_ak47", "AK-47" );
-        menu.AddItem( "weapon_galil", "Galil" );
-        menu.AddItem( "weapon_sg556", "SG-556" );
-    }
+	if ( GetClientTeam( client ) == CS_TEAM_CT )
+	{
+		menu.SetTitle( "Select a CT rifle:" );
+		menu.AddItem( "weapon_m4a1", "M4A4" );
+		menu.AddItem( "weapon_m4a1_silencer", "M4A1-S" );
+		menu.AddItem( "weapon_aug", "AUG" );
+	}
+	else if ( GetClientTeam( client ) == CS_TEAM_T )
+	{
+		menu.SetTitle( "Select a T rifle:" );
+		menu.AddItem( "weapon_ak47", "AK-47" );
+		menu.AddItem( "weapon_galilar", "Galil" );
+		menu.AddItem( "weapon_sg556", "SG-556" );
+	}
 	menu.Display( client, MENU_TIME_LENGTH );
 }
 
 public void GivePistolMenu( int client )
 {
 	Menu menu = new Menu( MenuHandler_Pistol );
-    if ( GetClientTeam( client ) == CS_TEAM_CT )
-    {
-        menu.SetTitle( "Select a CT pistol:" );
-        menu.AddItem( "weapon_usp_silencer", "USP-S" );
-        menu.AddItem( "weapon_hkp2000", "P2000" );
-        menu.AddItem( "weapon_elite", "Dual Berettas" );
-        menu.AddItem( "weapon_p250", "P250" );
-        menu.AddItem( "weapon_fiveseven", "Five-seveN" );
-        menu.AddItem( "weapon_deagle", "Desert Eagle" );
-    }
-    else if ( GetClientTeam( client ) == CS_TEAM_T )
-    {
-        menu.SetTitle( "Select a T pistol:" );
-        menu.AddItem( "weapon_glock", "Glock-18" );
-        menu.AddItem( "weapon_elite", "Dual Berettas" );
-        menu.AddItem( "weapon_p250", "P250" );
-        menu.AddItem( "weapon_tec9", "Tec-9" );
-        menu.AddItem( "weapon_deagle", "Desert Eagle" );
-    }
+	if ( GetClientTeam( client ) == CS_TEAM_CT )
+	{
+		menu.SetTitle( "Select a CT pistol:" );
+		menu.AddItem( "weapon_usp_silencer", "USP-S" );
+		menu.AddItem( "weapon_hkp2000", "P2000" );
+		menu.AddItem( "weapon_elite", "Dual Berettas" );
+		menu.AddItem( "weapon_p250", "P250" );
+		menu.AddItem( "weapon_fiveseven", "Five-seveN" );
+		menu.AddItem( "weapon_deagle", "Desert Eagle" );
+	}
+	else if ( GetClientTeam( client ) == CS_TEAM_T )
+	{
+		menu.SetTitle( "Select a T pistol:" );
+		menu.AddItem( "weapon_glock", "Glock-18" );
+		menu.AddItem( "weapon_elite", "Dual Berettas" );
+		menu.AddItem( "weapon_p250", "P250" );
+		menu.AddItem( "weapon_tec9", "Tec-9" );
+		menu.AddItem( "weapon_deagle", "Desert Eagle" );
+	}
 	menu.Display( client, MENU_TIME_LENGTH );
 }
 
-public void GiveAwpMenu( int client )
+public void GiveAWPMenu( int client )
 {
 	Menu menu = new Menu( MenuHandler_AWP );
 	menu.SetTitle( "Allow yourself to receive AWPs?" );
@@ -221,10 +243,12 @@ public int MenuHandler_Rifle( Menu menu, MenuAction action, int client, int choi
 			SetClientCookie( client, g_hTRifleChoiceCookie, buffer );
 		}
 		
-        GivePistolMenu( client );
+		GivePistolMenu( client );
 	}
 	else if ( action == MenuAction_End )
 		delete menu;
+
+	return 0;
 }
 
 public int MenuHandler_Pistol( Menu menu, MenuAction action, int client, int choice )
@@ -245,10 +269,13 @@ public int MenuHandler_Pistol( Menu menu, MenuAction action, int client, int cho
 			g_TPistolChoice[client] = buffer;
 			SetClientCookie( client, g_hTPistolChoiceCookie, buffer );
 		}
-        GivePistolMenu( client );
+
+		GiveAWPMenu( client );
 	}
 	else if ( action == MenuAction_End )
 		delete menu;
+
+	return 0;
 }
 
 public int MenuHandler_AWP( Menu menu, MenuAction action, int client, int choice )
@@ -261,4 +288,6 @@ public int MenuHandler_AWP( Menu menu, MenuAction action, int client, int choice
 	}
 	else if ( action == MenuAction_End )
 		delete menu;
+
+	return 0;
 }

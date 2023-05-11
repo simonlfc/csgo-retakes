@@ -38,7 +38,6 @@ ArrayList g_SavedCvars;
 /** Client variable arrays **/
 int g_SpawnIndices[MAXPLAYERS+1];
 int g_RoundPoints[MAXPLAYERS+1];
-bool g_PluginTeamSwitch[MAXPLAYERS+1];
 int g_Team[MAXPLAYERS+1];
 
 /** Queue Handles **/
@@ -147,14 +146,14 @@ public void OnPluginStart() {
     /** ConVars **/
     g_EnabledCvar = CreateConVar("sm_retakes_enabled", "1", "Whether the plugin is enabled");
     g_hAutoTeamsCvar = CreateConVar("sm_retakes_auto_set_teams", "1", "Whether retakes is allowed to automanage team balance");
-    g_hEditorEnabled = CreateConVar("sm_retakes_editor_enabled", "1", "Whether the editor can be launched by admins");
+    g_hEditorEnabled = CreateConVar("sm_retakes_editor_enabled", "0", "Whether the editor can be launched by admins");
     g_hMaxPlayers = CreateConVar("sm_retakes_maxplayers", "9", "Maximum number of players allowed in the game at once.", _, true, 2.0);
     g_hRatioConstant = CreateConVar("sm_retakes_ratio_constant", "0.425", "Ratio constant for team sizes.");
     g_hRoundsToScramble = CreateConVar("sm_retakes_scramble_rounds", "10", "Consecutive terrorist wins to cause a team scramble.");
     g_hRoundTime = CreateConVar("sm_retakes_round_time", "12", "Round time left in seconds.");
     g_hUseRandomTeams = CreateConVar("sm_retakes_random_teams", "0", "If set to 1, this will randomize the teams every round.");
     g_WarmupTimeCvar = CreateConVar("sm_retakes_warmuptime", "25", "Warmup time on map starts");
-    g_MessagePrefix = CreateConVar("sm_retake_message_prefix", "[{GREEN}Retakes{NORMAL}]", "Message prefix used on chat messages.");
+    g_MessagePrefix = CreateConVar("sm_retake_message_prefix", "[{PURPLE}BEN{NORMAL}]", "Message prefix used on chat messages.");
 
     g_EnabledCvar.AddChangeHook(EnabledChanged);
 
